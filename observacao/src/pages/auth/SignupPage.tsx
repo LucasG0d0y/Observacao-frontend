@@ -97,7 +97,6 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onBack }) => {
   };
 
   const getPasswordRequirements = () => {
-    const validation = validatePassword(formData.password);
     return {
       minLength: formData.password.length >= 8,
       uppercase: /[A-Z]/.test(formData.password),

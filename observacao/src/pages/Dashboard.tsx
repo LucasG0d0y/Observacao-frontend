@@ -9,9 +9,15 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("inicio");
   const [showProfile, setShowProfile] = useState(false);
   const [filter, setFilter] = useState<FilterType>("todas");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestTitle, setRequestTitle] = useState("");
+  const [requestAddress, setRequestAddress] = useState("");
+  const [requestPhone, setRequestPhone] = useState("");
+  const [requestPriority, setRequestPriority] = useState("Normal");
+  const [requestDescription, setRequestDescription] = useState("");
   const userName = "Maria Silva";
 
   const filtered = MOCK_REQUESTS.filter((r) => {
@@ -21,11 +27,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return true;
   });
 
-  const tabs: [string, string, string][] = [
-    ["inicio", "ti-home", "Início"],
-    ["solicitacoes", "ti-list", "Minhas Solicitações"],
-    ["notificacoes", "ti-bell", "Notificações"],
-  ];
+  const selectedCategoryLabel =
+    CATEGORIES.find((cat) => cat.id.toString() === selectedCategory)?.label ||
+    "Selecione uma categoria";
+
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setShowRequestModal(true);
+  };
+
+  const handleRequestSubmit = () => {
+    setShowRequestModal(false);
+    setSelectedCategory("");
+    setRequestTitle("");
+    setRequestAddress("");
+    setRequestPhone("");
+    setRequestPriority("Normal");
+    setRequestDescription("");
+  };
+
+  const handleRequestCancel = () => {
+    setShowRequestModal(false);
+    setSelectedCategory("");
+  };
 
   const stats = [
     {
@@ -84,26 +108,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             </span>
           </div>
 
-          <div className="flex gap-1">
-            {tabs.map(([id, icon, label]) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm transition-all ${
-                  activeTab === id
-                    ? "bg-slate-50 border border-slate-200 font-bold text-[#0F2A4A]"
-                    : "border border-transparent font-medium text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                <i className={`ti ${icon} text-base`} aria-hidden="true" />
-                {label}
-                {id === "notificacoes" && (
-                  <span className="bg-red-500 text-white rounded-full text-[10px] font-bold px-1.5 py-px leading-none">
-                    2
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <button className="relative rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2">
+              <i className="ti ti-bell text-base" aria-hidden="true" />
+              Notificações
+              <span className="absolute -right-2 -top-1 bg-red-500 text-white rounded-full text-[10px] font-bold px-1.5 py-px">
+                2
+              </span>
+            </button>
           </div>
         </div>
 
@@ -225,10 +237,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           ))}
         </div>
 
-        <div className="grid grid-cols-[1fr_320px] gap-6">
+        <div className="grid grid-cols-[1.9fr_300px] gap-6">
           {/* REQUESTS LIST */}
           <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+            <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
               <div>
                 <h2 className="text-base font-bold mb-1 text-[#0F2A4A]">
                   Minhas Solicitações
@@ -237,7 +249,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   Acompanhe o status das suas demandas
                 </p>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {filterOptions.map(([id, label]) => (
                   <button
                     key={id}
@@ -254,59 +266,65 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </div>
             </div>
 
-            {filtered.map((req, i) => (
-              <div
-                key={req.id}
-                className={`px-6 py-4.5 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors ${
-                  i < filtered.length - 1 ? "border-b border-slate-100" : ""
-                }`}
-              >
-                <div className="w-11 h-11 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
-                  <i
-                    className={`ti ${req.icon} text-xl text-slate-500`}
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold text-sm text-[#0F2A4A] mb-1">
-                    {req.type}
-                  </div>
-                  <div className="flex gap-3 text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <i
-                        className="ti ti-map-pin text-[11px]"
-                        aria-hidden="true"
-                      />{" "}
-                      {req.addr}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <i
-                        className="ti ti-calendar text-[11px]"
-                        aria-hidden="true"
-                      />{" "}
-                      {req.date}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <Badge status={req.status} variant={req.variant} />
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    {req.id}
-                  </span>
-                </div>
-                <i
-                  className="ti ti-chevron-right text-slate-200 text-sm"
-                  aria-hidden="true"
-                />
-              </div>
-            ))}
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left">
+                <thead className="bg-slate-50">
+                  <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    <th className="px-6 py-4">Tipo</th>
+                    <th className="px-6 py-4">Local</th>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Protocolo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((req) => (
+                    <tr
+                      key={req.id}
+                      className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <td className="px-6 py-4 align-top">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                            <i
+                              className={`ti ${req.icon} text-xl text-slate-500`}
+                              aria-hidden="true"
+                            />
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-[#0F2A4A]">
+                              {req.type}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {req.addr}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top text-sm text-slate-600">
+                        {req.addr}
+                      </td>
+                      <td className="px-6 py-4 align-top text-sm text-slate-600">
+                        {req.date}
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        <Badge status={req.status} variant={req.variant} />
+                      </td>
+                      <td className="px-6 py-4 align-top text-xs text-slate-400 font-mono">
+                        {req.id}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div className="px-6 py-3.5 border-t border-slate-100">
               <a
                 href="#"
                 className="text-xs font-semibold text-[#2E7BD4] flex items-center gap-1 hover:underline"
               >
-                Ver todas as solicitações{" "}
+                Ver todas as solicitações
                 <i className="ti ti-arrow-right text-xs" aria-hidden="true" />
               </a>
             </div>
@@ -318,46 +336,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             <div className="bg-[#0F2A4A] rounded-2xl p-6 text-white">
               <h3 className="text-sm font-bold mb-2">Nova Solicitação</h3>
               <p className="text-xs text-white/65 leading-relaxed mb-5">
-                Selecione uma categoria para registrar um novo problema na sua
-                região.
+                Clique no botão abaixo para abrir o formulário e escolher a
+                categoria dentro do popup.
               </p>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {CATEGORIES.slice(0, 6).map((cat) => (
-                  <button
-                    key={cat.id}
-                    className="bg-white/10 border border-white/15 rounded-xl py-2.5 px-1.5 flex flex-col items-center gap-1.5 hover:bg-white/20 transition-colors"
-                  >
-                    <i
-                      className={`ti ${cat.icon} text-lg text-white/85`}
-                      aria-hidden="true"
-                    />
-                    <span className="text-[9px] text-white/70 text-center leading-tight font-medium">
-                      {cat.label.split(" ")[0]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <button className="w-full bg-amber-400 text-[#0F2A4A] rounded-xl py-2.5 text-xs font-bold hover:bg-amber-300 transition-colors">
-                + Iniciar nova solicitação
+              <button
+                type="button"
+                onClick={() => setShowRequestModal(true)}
+                className="w-full bg-amber-400 text-[#0F2A4A] rounded-xl py-2.5 text-xs font-bold hover:bg-amber-300 transition-colors"
+              >
+                + Nova solicitação
               </button>
             </div>
 
-            {/* Activity */}
+            {/* Notifications */}
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
               <h3 className="text-sm font-bold mb-4 text-[#0F2A4A]">
-                Atividade Recente
+                Notificações
               </h3>
-              <div className="flex flex-col gap-3.5">
+              <div className="space-y-3">
                 {ACTIVITY_EVENTS.map((ev, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+                  <div
+                    key={i}
+                    className="rounded-3xl border border-slate-100 bg-slate-50 p-4 flex items-start gap-3"
+                  >
+                    <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm">
                       <i
-                        className={`ti ${ev.icon} text-base ${ev.iconColor}`}
+                        className={`ti ${ev.icon} text-lg ${ev.iconColor}`}
                         aria-hidden="true"
                       />
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-700 leading-relaxed mb-0.5">
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-700 leading-snug">
                         {ev.msg}
                       </p>
                       <span className="text-[11px] text-slate-400">
@@ -371,6 +380,172 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </div>
         </div>
       </main>
+
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-[#0F2A4A] px-8 py-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    Nova Solicitação
+                  </h2>
+                  <p className="text-sm text-slate-200 mt-1">
+                    Categoria selecionada:{" "}
+                    <span className="font-semibold">
+                      {selectedCategoryLabel}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRequestCancel}
+                  className="text-white/80 hover:text-white"
+                >
+                  <i className="ti ti-x text-lg" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+            <div className="p-8 space-y-5">
+              {!selectedCategory ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Selecione a categoria
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {CATEGORIES.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() =>
+                            handleCategorySelect(cat.id.toString())
+                          }
+                          className="rounded-2xl border border-slate-200 p-4 bg-slate-50 text-slate-700 hover:border-[#0F2A4A] hover:bg-slate-100 transition-colors"
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-xl ${cat.bgColor} flex items-center justify-center mx-auto mb-2`}
+                          >
+                            <i
+                              className={`ti ${cat.icon} text-xl ${cat.iconColor}`}
+                              aria-hidden="true"
+                            />
+                          </div>
+                          <div className="text-xs font-semibold text-center">
+                            {cat.label}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Escolha a categoria para continuar com os detalhes da
+                    solicitação.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Categoria selecionada
+                    </label>
+                    <div className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 bg-slate-50">
+                      {selectedCategoryLabel}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Título do pedido
+                    </label>
+                    <input
+                      type="text"
+                      value={requestTitle}
+                      onChange={(e) => setRequestTitle(e.target.value)}
+                      placeholder="Ex: Poste apagado na rua"
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Endereço da ocorrência
+                    </label>
+                    <input
+                      type="text"
+                      value={requestAddress}
+                      onChange={(e) => setRequestAddress(e.target.value)}
+                      placeholder="Ex: Rua das Flores, 100 - Centro"
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Telefone de contato
+                      </label>
+                      <input
+                        type="tel"
+                        value={requestPhone}
+                        onChange={(e) => setRequestPhone(e.target.value)}
+                        placeholder="(11) 98765-4321"
+                        className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Prioridade
+                      </label>
+                      <select
+                        value={requestPriority}
+                        onChange={(e) => setRequestPriority(e.target.value)}
+                        className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                      >
+                        <option>Normal</option>
+                        <option>Alta</option>
+                        <option>Urgente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Descrição do problema
+                    </label>
+                    <textarea
+                      value={requestDescription}
+                      onChange={(e) => setRequestDescription(e.target.value)}
+                      placeholder="Descreva o problema, local exato e impacto"
+                      rows={5}
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors resize-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={handleRequestCancel}
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRequestSubmit}
+                      disabled={
+                        !selectedCategory ||
+                        !requestTitle ||
+                        !requestAddress ||
+                        !requestDescription
+                      }
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Abrir solicitação
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
