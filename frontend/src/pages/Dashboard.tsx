@@ -1,0 +1,685 @@
+import React, { useState, useEffect } from "react";
+import { CATEGORIES, ACTIVITY_EVENTS } from "../constants";
+import {
+  solicitacaoService,
+  authService,
+  SolicitacaoResponseDTO,
+  CategoriaSolicitacao,
+} from "../services/api";
+import type { FilterType } from "../types";
+import Badge from "../components/Badge";
+
+interface DashboardProps {
+  onLogout: () => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const [search, setSearch] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
+  const [filter, setFilter] = useState<FilterType>("todas");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestTitle, setRequestTitle] = useState("");
+  const [requestAddress, setRequestAddress] = useState("");
+  const [requestPhone, setRequestPhone] = useState("");
+  const [requestPriority, setRequestPriority] = useState("MEDIA");
+  const [requestDescription, setRequestDescription] = useState("");
+
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoResponseDTO[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const usuario = authService.getCurrentUser();
+  const userName = usuario?.nome || "Usuário";
+
+  // Carrega solicitações ao montar o componente
+  useEffect(() => {
+    carregarSolicitacoes();
+  }, []);
+
+  const carregarSolicitacoes = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const dados = await solicitacaoService.getAll();
+      setSolicitacoes(dados || []);
+    } catch (err: any) {
+      setError("Erro ao carregar solicitações");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filtered = solicitacoes.filter((r) => {
+    if (filter === "abertas")
+      return r.status === "ABERTO" || r.status === "EM_EXECUCAO";
+    if (filter === "concluidas") return r.status === "CONCLUIDO";
+    return true;
+  });
+
+  const selectedCategoryLabel =
+    CATEGORIES.find((cat) => cat.id.toString() === selectedCategory)?.label ||
+    "Selecione uma categoria";
+
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setShowRequestModal(true);
+  };
+
+  const handleRequestSubmit = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const categoryMap: { [key: string]: CategoriaSolicitacao } = {
+        iluminacao: "ILUMINACAO_PUBLICA",
+        buraco: "BURACO_VIA",
+        limpeza: "LIMPEZA_URBANA",
+        saude: "SAUDE_PUBLICA",
+        seguranca: "SEGURANCA_ESCOLAR",
+        poda: "PODA_ARVORES",
+        outros: "OUTROS",
+      };
+
+      const novaSolicitacao = await solicitacaoService.create({
+        categoria: categoryMap[selectedCategory] || "OUTROS",
+        descricao: requestDescription,
+        prioridade: requestPriority as any,
+        usuarioId: usuario?.id,
+        endereco: requestAddress,
+        telefone: requestPhone,
+        anonima: false,
+      });
+
+      // Recarregar solicitações
+      await carregarSolicitacoes();
+
+      // Limpar formulário
+      setShowRequestModal(false);
+      setSelectedCategory("");
+      setRequestTitle("");
+      setRequestAddress("");
+      setRequestPhone("");
+      setRequestPriority("MEDIA");
+      setRequestDescription("");
+    } catch (err: any) {
+      setError("Erro ao criar solicitação: " + err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestCancel = () => {
+    setShowRequestModal(false);
+    setSelectedCategory("");
+    setRequestTitle("");
+    setRequestAddress("");
+    setRequestPhone("");
+    setRequestPriority("MEDIA");
+    setRequestDescription("");
+    setError("");
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    onLogout();
+  };
+
+  const stats = [
+    {
+      label: "Total de solicitações",
+      val: solicitacoes.length.toString(),
+      icon: "ti-file-text",
+      iconClass: "text-blue-600",
+      bgClass: "bg-blue-50",
+    },
+    {
+      label: "Em execução",
+      val: solicitacoes
+        .filter((s) => s.status === "EM_EXECUCAO")
+        .length.toString(),
+      icon: "ti-clock-hour-4",
+      iconClass: "text-sky-500",
+      bgClass: "bg-sky-50",
+    },
+    {
+      label: "Em aberto",
+      val: solicitacoes.filter((s) => s.status === "ABERTO").length.toString(),
+      icon: "ti-circle-dot",
+      iconClass: "text-orange-500",
+      bgClass: "bg-orange-50",
+    },
+    {
+      label: "Concluídas",
+      val: solicitacoes
+        .filter((s) => s.status === "CONCLUIDO")
+        .length.toString(),
+      icon: "ti-circle-check",
+      iconClass: "text-emerald-600",
+      bgClass: "bg-emerald-50",
+    },
+  ];
+
+  const filterOptions: [FilterType, string][] = [
+    ["todas", "Todas"],
+    ["abertas", "Em andamento"],
+    ["concluidas", "Concluídas"],
+  ];
+
+  const profileMenu: [string, string][] = [
+    ["ti-user", "Meu Perfil"],
+    ["ti-settings", "Configurações"],
+    ["ti-shield", "Privacidade"],
+  ];
+
+  return (
+    <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
+      {/* TOPNAV */}
+      <nav className="bg-white border-b border-slate-100 flex items-center justify-between px-10 h-16 sticky top-0 z-50">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-[#0F2A4A] flex items-center justify-center">
+              <i className="ti ti-eye text-white text-sm" aria-hidden="true" />
+            </div>
+            <span className="font-bold text-base text-[#0F2A4A] tracking-tight">
+              Observ<span className="text-[#2E7BD4]">Ação</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button className="relative rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2">
+              <i className="ti ti-bell text-base" aria-hidden="true" />
+              Notificações
+              <span className="absolute -right-2 -top-1 bg-red-500 text-white rounded-full text-[10px] font-bold px-1.5 py-px">
+                2
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setShowProfile(!showProfile)}
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
+          >
+            <div className="text-right">
+              <div className="text-sm font-bold text-[#0F2A4A]">
+                Maria Silva
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Cidadã verificada
+              </div>
+            </div>
+            <div className="w-9 h-9 rounded-full bg-[#0F2A4A] flex items-center justify-center shrink-0">
+              <span className="text-[13px] font-bold text-white">MS</span>
+            </div>
+            <i
+              className="ti ti-chevron-down text-slate-400 text-sm"
+              aria-hidden="true"
+            />
+          </button>
+
+          {showProfile && (
+            <div className="absolute right-0 top-[calc(100%+8px)] bg-white border border-slate-100 rounded-xl p-2 w-52 shadow-lg z-50">
+              <div className="px-3.5 py-3 border-b border-slate-100 mb-1">
+                <div className="font-bold text-sm text-[#0F2A4A]">
+                  Maria Silva
+                </div>
+                <div className="text-xs text-slate-400">
+                  maria.silva@email.com
+                </div>
+              </div>
+              {profileMenu.map(([icon, label]) => (
+                <button
+                  key={label}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-left font-[inherit]"
+                >
+                  <i
+                    className={`ti ${icon} text-base text-slate-400`}
+                    aria-hidden="true"
+                  />
+                  {label}
+                </button>
+              ))}
+              <div className="border-t border-slate-100 mt-1 pt-1">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors text-left font-[inherit]"
+                >
+                  <i className="ti ti-logout text-base" aria-hidden="true" />
+                  Sair
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      <main className="max-w-[1180px] mx-auto px-10 py-9">
+        {/* GREETING */}
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold mb-1.5 text-[#0F2A4A]">
+              Olá, {userName} 👋
+            </h1>
+            <p className="text-slate-400 text-sm">
+              Acompanhe suas solicitações ou registre um novo problema em sua
+              região.
+            </p>
+          </div>
+          <div className="flex gap-2.5">
+            <div className="relative">
+              <i
+                className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"
+                aria-hidden="true"
+              />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por protocolo..."
+                className="bg-white border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 w-60 focus:outline-none focus:border-blue-400 transition-colors"
+              />
+            </div>
+            <button className="bg-[#2E7BD4] text-white rounded-xl px-5 text-sm font-bold hover:bg-blue-600 transition-colors">
+              Buscar
+            </button>
+          </div>
+        </div>
+
+        {/* STATS */}
+        <div className="grid grid-cols-4 gap-4 mb-9">
+          {stats.map(({ label, val, icon, iconClass, bgClass }) => (
+            <div
+              key={label}
+              className="bg-white border border-slate-100 rounded-2xl px-5 py-5"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-xs text-slate-400 font-semibold mb-2">
+                    {label}
+                  </div>
+                  <div className="text-4xl font-extrabold text-[#0F2A4A]">
+                    {val}
+                  </div>
+                </div>
+                <div
+                  className={`w-10 h-10 rounded-xl ${bgClass} flex items-center justify-center`}
+                >
+                  <i
+                    className={`ti ${icon} text-xl ${iconClass}`}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-[1.9fr_300px] gap-6">
+          {/* REQUESTS LIST */}
+          <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
+              <div>
+                <h2 className="text-base font-bold mb-1 text-[#0F2A4A]">
+                  Minhas Solicitações
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Acompanhe o status das suas demandas
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {filterOptions.map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setFilter(id)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      filter === id
+                        ? "bg-[#0F2A4A] text-white"
+                        : "bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="px-6 py-10 text-center text-slate-500">
+                  <i className="ti ti-loader animate-spin text-2xl mb-2 block" />
+                  Carregando solicitações...
+                </div>
+              ) : error ? (
+                <div className="px-6 py-10 text-center text-red-500">
+                  <p>{error}</p>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="px-6 py-10 text-center text-slate-500">
+                  <p>Nenhuma solicitação encontrada</p>
+                </div>
+              ) : (
+                <table className="min-w-full text-left">
+                  <thead className="bg-slate-50">
+                    <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-6 py-4">Tipo</th>
+                      <th className="px-6 py-4">Local</th>
+                      <th className="px-6 py-4">Data</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Protocolo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((req) => {
+                      const categoryIcon =
+                        CATEGORIES.find(
+                          (c) =>
+                            c.id === selectedCategory ||
+                            c.label
+                              .toLowerCase()
+                              .includes(req.categoria.toLowerCase()),
+                        )?.icon || "ti-file-text";
+                      const statusMap: { [key: string]: string } = {
+                        ABERTO: "ABERTO",
+                        EM_EXECUCAO: "EM EXECUÇÃO",
+                        CONCLUIDO: "CONCLUÍDO",
+                        EM_TRIAGEM: "EM TRIAGEM",
+                      };
+                      return (
+                        <tr
+                          key={req.id}
+                          className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-4 align-top">
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                                <i
+                                  className={`ti ${categoryIcon} text-xl text-slate-500`}
+                                  aria-hidden="true"
+                                />
+                              </div>
+                              <div>
+                                <div className="font-bold text-sm text-[#0F2A4A]">
+                                  {req.categoria.replace(/_/g, " ")}
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  {req.endereco || "Sem endereço"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600">
+                            {req.endereco || "N/A"}
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600">
+                            {new Date(req.dataAbertura).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <Badge
+                              status={statusMap[req.status] || req.status}
+                              variant={
+                                req.status === "ABERTO"
+                                  ? "orange"
+                                  : req.status === "EM_EXECUCAO"
+                                    ? "blue"
+                                    : req.status === "CONCLUIDO"
+                                      ? "green"
+                                      : "blue"
+                              }
+                            />
+                          </td>
+                          <td className="px-6 py-4 align-top text-xs text-slate-400 font-mono">
+                            {req.protocoloNumero || `PRF-${req.id}`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-6 py-3.5 border-t border-slate-100">
+              <a
+                href="#"
+                className="text-xs font-semibold text-[#2E7BD4] flex items-center gap-1 hover:underline"
+              >
+                Ver todas as solicitações
+                <i className="ti ti-arrow-right text-xs" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+
+          {/* SIDEBAR */}
+          <div className="flex flex-col gap-5">
+            {/* Nova Solicitação */}
+            <div className="bg-[#0F2A4A] rounded-2xl p-6 text-white">
+              <h3 className="text-sm font-bold mb-2">Nova Solicitação</h3>
+              <p className="text-xs text-white/65 leading-relaxed mb-5">
+                Clique no botão abaixo para abrir o formulário e escolher a
+                categoria dentro do popup.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowRequestModal(true)}
+                className="w-full bg-amber-400 text-[#0F2A4A] rounded-xl py-2.5 text-xs font-bold hover:bg-amber-300 transition-colors"
+              >
+                + Nova solicitação
+              </button>
+            </div>
+
+            {/* Notifications */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5">
+              <h3 className="text-sm font-bold mb-4 text-[#0F2A4A]">
+                Notificações
+              </h3>
+              <div className="space-y-3">
+                {ACTIVITY_EVENTS.map((ev, i) => (
+                  <div
+                    key={i}
+                    className="rounded-3xl border border-slate-100 bg-slate-50 p-4 flex items-start gap-3"
+                  >
+                    <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm">
+                      <i
+                        className={`ti ${ev.icon} text-lg ${ev.iconColor}`}
+                        aria-hidden="true"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-700 leading-snug">
+                        {ev.msg}
+                      </p>
+                      <span className="text-[11px] text-slate-400">
+                        {ev.time}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-[#0F2A4A] px-8 py-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    Nova Solicitação
+                  </h2>
+                  <p className="text-sm text-slate-200 mt-1">
+                    Categoria selecionada:{" "}
+                    <span className="font-semibold">
+                      {selectedCategoryLabel}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRequestCancel}
+                  className="text-white/80 hover:text-white"
+                >
+                  <i className="ti ti-x text-lg" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+            <div className="p-8 space-y-5">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              {!selectedCategory ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Selecione a categoria
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {CATEGORIES.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() =>
+                            handleCategorySelect(cat.id.toString())
+                          }
+                          className="rounded-2xl border border-slate-200 p-4 bg-slate-50 text-slate-700 hover:border-[#0F2A4A] hover:bg-slate-100 transition-colors"
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-xl ${cat.bgColor} flex items-center justify-center mx-auto mb-2`}
+                          >
+                            <i
+                              className={`ti ${cat.icon} text-xl ${cat.iconColor}`}
+                              aria-hidden="true"
+                            />
+                          </div>
+                          <div className="text-xs font-semibold text-center">
+                            {cat.label}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Escolha a categoria para continuar com os detalhes da
+                    solicitação.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Categoria selecionada
+                    </label>
+                    <div className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 bg-slate-50">
+                      {selectedCategoryLabel}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Título do pedido
+                    </label>
+                    <input
+                      type="text"
+                      value={requestTitle}
+                      onChange={(e) => setRequestTitle(e.target.value)}
+                      placeholder="Ex: Poste apagado na rua"
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Endereço da ocorrência
+                    </label>
+                    <input
+                      type="text"
+                      value={requestAddress}
+                      onChange={(e) => setRequestAddress(e.target.value)}
+                      placeholder="Ex: Rua das Flores, 100 - Centro"
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Telefone de contato
+                      </label>
+                      <input
+                        type="tel"
+                        value={requestPhone}
+                        onChange={(e) => setRequestPhone(e.target.value)}
+                        placeholder="(11) 98765-4321"
+                        className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Prioridade
+                      </label>
+                      <select
+                        value={requestPriority}
+                        onChange={(e) => setRequestPriority(e.target.value)}
+                        className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
+                      >
+                        <option value="BAIXA">Baixa</option>
+                        <option value="MEDIA">Normal</option>
+                        <option value="ALTA">Alta</option>
+                        <option value="URGENTE">Urgente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Descrição do problema
+                    </label>
+                    <textarea
+                      value={requestDescription}
+                      onChange={(e) => setRequestDescription(e.target.value)}
+                      placeholder="Descreva o problema, local exato e impacto"
+                      rows={5}
+                      className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors resize-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={handleRequestCancel}
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRequestSubmit}
+                      disabled={
+                        !selectedCategory ||
+                        !requestTitle ||
+                        !requestAddress ||
+                        !requestDescription
+                      }
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Abrir solicitação
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;
