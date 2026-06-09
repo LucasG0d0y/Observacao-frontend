@@ -48,7 +48,7 @@ REM Iniciar backend
 echo.
 echo ========== INICIANDO BACKEND ==========
 echo.
-start "Backend - Observacao" cmd /k "cd backend\server && mvn spring-boot:run"
+start "Backend - Observacao" cmd /k "cd backend\server && mvnw.cmd spring-boot:run"
 
 REM Aguardar um pouco para o backend iniciar
 timeout /t 5 /nobreak
