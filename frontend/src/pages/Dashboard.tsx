@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CATEGORIES, ACTIVITY_EVENTS } from "../constants";
 import {
   solicitacaoService,
@@ -13,6 +13,33 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
+// Mapa de categoria do backend → ícone do frontend
+const CATEGORY_ICON_MAP: Record<string, string> = {
+  ILUMINACAO_PUBLICA:  "ti-bulb",
+  INFRAESTRUTURA_URBANA: "ti-alert-triangle",
+  LIMPEZA_URBANA:      "ti-trash",
+  SAUDE_PUBLICA:       "ti-heart-rate-monitor",
+  SEGURANCA_PUBLICA:   "ti-shield-check",
+  MEIO_AMBIENTE:       "ti-trees",
+  TRANSITO_MOBILIDADE: "ti-car",
+  EDUCACAO:            "ti-school",
+  OBRAS_PUBLICAS:      "ti-building",
+  SANEAMENTO:          "ti-droplet",
+  SERVICOS_PUBLICOS:   "ti-briefcase",
+  OUTROS:              "ti-grid-dots",
+};
+
+// Mapa de categoria do frontend (id) → enum do backend
+const CATEGORY_MAP: Record<string, CategoriaSolicitacao> = {
+  iluminacao: "ILUMINACAO_PUBLICA",
+  buraco:     "INFRAESTRUTURA_URBANA",
+  limpeza:    "LIMPEZA_URBANA",
+  saude:      "SAUDE_PUBLICA",
+  seguranca:  "SEGURANCA_PUBLICA",
+  poda:       "MEIO_AMBIENTE",
+  outros:     "OUTROS",
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [search, setSearch] = useState("");
   const [showProfile, setShowProfile] = useState(false);
@@ -25,33 +52,52 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [requestPriority, setRequestPriority] = useState("MEDIA");
   const [requestDescription, setRequestDescription] = useState("");
 
-  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoResponseDTO[]>(
-    [],
-  );
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoResponseDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Ref para fechar o dropdown ao clicar fora
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const usuario = authService.getCurrentUser();
   const userName = usuario?.nome || "Usuário";
 
-  // Carrega solicitações ao montar o componente
+  // Iniciais do nome para o avatar
+  const userInitials = userName
+    .split(" ")
+    .slice(0, 2)
+    .map((w: string) => w[0])
+    .join("")
+    .toUpperCase();
+
+  // Fecha o dropdown de perfil ao clicar fora
   useEffect(() => {
-    carregarSolicitacoes();
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const carregarSolicitacoes = async () => {
+  const carregarSolicitacoes = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
       const dados = await solicitacaoService.getAll();
       setSolicitacoes(dados || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError("Erro ao carregar solicitações");
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    carregarSolicitacoes();
+  }, [carregarSolicitacoes]);
 
   const filtered = solicitacoes.filter((r) => {
     if (filter === "abertas")
@@ -66,54 +112,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    setShowRequestModal(true);
   };
 
-  const handleRequestSubmit = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const categoryMap: { [key: string]: CategoriaSolicitacao } = {
-        iluminacao: "ILUMINACAO_PUBLICA",
-        buraco: "BURACO_VIA",
-        limpeza: "LIMPEZA_URBANA",
-        saude: "SAUDE_PUBLICA",
-        seguranca: "SEGURANCA_ESCOLAR",
-        poda: "PODA_ARVORES",
-        outros: "OUTROS",
-      };
-
-      const novaSolicitacao = await solicitacaoService.create({
-        categoria: categoryMap[selectedCategory] || "OUTROS",
-        descricao: requestDescription,
-        prioridade: requestPriority as any,
-        usuarioId: usuario?.id,
-        endereco: requestAddress,
-        telefone: requestPhone,
-        anonima: false,
-      });
-
-      // Recarregar solicitações
-      await carregarSolicitacoes();
-
-      // Limpar formulário
-      setShowRequestModal(false);
-      setSelectedCategory("");
-      setRequestTitle("");
-      setRequestAddress("");
-      setRequestPhone("");
-      setRequestPriority("MEDIA");
-      setRequestDescription("");
-    } catch (err: any) {
-      setError("Erro ao criar solicitação: " + err.message);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRequestCancel = () => {
+  const resetForm = () => {
     setShowRequestModal(false);
     setSelectedCategory("");
     setRequestTitle("");
@@ -122,6 +123,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setRequestPriority("MEDIA");
     setRequestDescription("");
     setError("");
+  };
+
+  const handleRequestSubmit = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      await solicitacaoService.create({
+        categoria: CATEGORY_MAP[selectedCategory] ?? "OUTROS",
+        descricao: requestDescription,
+        prioridade: requestPriority as "BAIXA" | "MEDIA" | "ALTA" | "URGENTE",
+        usuarioId: usuario?.id,
+        endereco: requestAddress,
+        telefone: requestPhone,
+        anonima: false,
+      });
+
+      await carregarSolicitacoes();
+      resetForm();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      setError("Erro ao criar solicitação: " + message);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -139,9 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     },
     {
       label: "Em execução",
-      val: solicitacoes
-        .filter((s) => s.status === "EM_EXECUCAO")
-        .length.toString(),
+      val: solicitacoes.filter((s) => s.status === "EM_EXECUCAO").length.toString(),
       icon: "ti-clock-hour-4",
       iconClass: "text-sky-500",
       bgClass: "bg-sky-50",
@@ -155,9 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     },
     {
       label: "Concluídas",
-      val: solicitacoes
-        .filter((s) => s.status === "CONCLUIDO")
-        .length.toString(),
+      val: solicitacoes.filter((s) => s.status === "CONCLUIDO").length.toString(),
       icon: "ti-circle-check",
       iconClass: "text-emerald-600",
       bgClass: "bg-emerald-50",
@@ -175,6 +198,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     ["ti-settings", "Configurações"],
     ["ti-shield", "Privacidade"],
   ];
+
+  const statusMap: Record<string, string> = {
+    ABERTO: "ABERTO",
+    EM_EXECUCAO: "EM EXECUÇÃO",
+    CONCLUIDO: "CONCLUÍDO",
+    EM_TRIAGEM: "EM TRIAGEM",
+    AGUARDANDO_COMPLEMENTACAO: "AGUARDANDO",
+    CANCELADO: "CANCELADO",
+    REJEITADO: "REJEITADO",
+  };
 
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
@@ -201,47 +234,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </div>
         </div>
 
-        <div className="relative">
+        {/* PROFILE DROPDOWN — fecha ao clicar fora */}
+        <div className="relative" ref={profileRef}>
           <button
-            onClick={() => setShowProfile(!showProfile)}
+            onClick={() => setShowProfile((prev) => !prev)}
             className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
           >
             <div className="text-right">
-              <div className="text-sm font-bold text-[#0F2A4A]">
-                Maria Silva
-              </div>
+              <div className="text-sm font-bold text-[#0F2A4A]">{userName}</div>
               <div className="text-[11px] text-slate-400">
-                Cidadã verificada
+                {usuario?.tipo === "GESTOR"
+                  ? "Gestor"
+                  : usuario?.tipo === "FUNCIONARIO_PUBLICO"
+                  ? "Funcionário Público"
+                  : "Cidadão verificado"}
               </div>
             </div>
             <div className="w-9 h-9 rounded-full bg-[#0F2A4A] flex items-center justify-center shrink-0">
-              <span className="text-[13px] font-bold text-white">MS</span>
+              <span className="text-[13px] font-bold text-white">{userInitials}</span>
             </div>
-            <i
-              className="ti ti-chevron-down text-slate-400 text-sm"
-              aria-hidden="true"
-            />
+            <i className="ti ti-chevron-down text-slate-400 text-sm" aria-hidden="true" />
           </button>
 
           {showProfile && (
             <div className="absolute right-0 top-[calc(100%+8px)] bg-white border border-slate-100 rounded-xl p-2 w-52 shadow-lg z-50">
               <div className="px-3.5 py-3 border-b border-slate-100 mb-1">
-                <div className="font-bold text-sm text-[#0F2A4A]">
-                  Maria Silva
-                </div>
-                <div className="text-xs text-slate-400">
-                  maria.silva@email.com
-                </div>
+                <div className="font-bold text-sm text-[#0F2A4A]">{userName}</div>
+                <div className="text-xs text-slate-400">{usuario?.email || ""}</div>
               </div>
               {profileMenu.map(([icon, label]) => (
                 <button
                   key={label}
                   className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-left font-[inherit]"
                 >
-                  <i
-                    className={`ti ${icon} text-base text-slate-400`}
-                    aria-hidden="true"
-                  />
+                  <i className={`ti ${icon} text-base text-slate-400`} aria-hidden="true" />
                   {label}
                 </button>
               ))}
@@ -267,8 +293,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               Olá, {userName} 👋
             </h1>
             <p className="text-slate-400 text-sm">
-              Acompanhe suas solicitações ou registre um novo problema em sua
-              região.
+              Acompanhe suas solicitações ou registre um novo problema em sua região.
             </p>
           </div>
           <div className="flex gap-2.5">
@@ -293,26 +318,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         {/* STATS */}
         <div className="grid grid-cols-4 gap-4 mb-9">
           {stats.map(({ label, val, icon, iconClass, bgClass }) => (
-            <div
-              key={label}
-              className="bg-white border border-slate-100 rounded-2xl px-5 py-5"
-            >
+            <div key={label} className="bg-white border border-slate-100 rounded-2xl px-5 py-5">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="text-xs text-slate-400 font-semibold mb-2">
-                    {label}
-                  </div>
-                  <div className="text-4xl font-extrabold text-[#0F2A4A]">
-                    {val}
-                  </div>
+                  <div className="text-xs text-slate-400 font-semibold mb-2">{label}</div>
+                  <div className="text-4xl font-extrabold text-[#0F2A4A]">{val}</div>
                 </div>
-                <div
-                  className={`w-10 h-10 rounded-xl ${bgClass} flex items-center justify-center`}
-                >
-                  <i
-                    className={`ti ${icon} text-xl ${iconClass}`}
-                    aria-hidden="true"
-                  />
+                <div className={`w-10 h-10 rounded-xl ${bgClass} flex items-center justify-center`}>
+                  <i className={`ti ${icon} text-xl ${iconClass}`} aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -324,12 +337,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
               <div>
-                <h2 className="text-base font-bold mb-1 text-[#0F2A4A]">
-                  Minhas Solicitações
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Acompanhe o status das suas demandas
-                </p>
+                <h2 className="text-base font-bold mb-1 text-[#0F2A4A]">Minhas Solicitações</h2>
+                <p className="text-xs text-slate-400">Acompanhe o status das suas demandas</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {filterOptions.map(([id, label]) => (
@@ -375,20 +384,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   </thead>
                   <tbody>
                     {filtered.map((req) => {
+                      // Ícone resolvido a partir do enum do backend
                       const categoryIcon =
-                        CATEGORIES.find(
-                          (c) =>
-                            c.id === selectedCategory ||
-                            c.label
-                              .toLowerCase()
-                              .includes(req.categoria.toLowerCase()),
-                        )?.icon || "ti-file-text";
-                      const statusMap: { [key: string]: string } = {
-                        ABERTO: "ABERTO",
-                        EM_EXECUCAO: "EM EXECUÇÃO",
-                        CONCLUIDO: "CONCLUÍDO",
-                        EM_TRIAGEM: "EM TRIAGEM",
-                      };
+                        CATEGORY_ICON_MAP[req.categoria] ?? "ti-file-text";
+
+                      // Data: tenta createdAt (campo real do backend), depois dataAbertura
+                      const rawDate =
+                        (req as unknown as Record<string, string>).createdAt ??
+                        req.dataAbertura;
+                      const displayDate = rawDate
+                        ? new Date(rawDate).toLocaleDateString("pt-BR")
+                        : "—";
+
+                      // Endereço: campo pode não vir do backend padrão
+                      const displayAddress =
+                        (req as unknown as Record<string, string>).endereco ?? "—";
+
                       return (
                         <tr
                           key={req.id}
@@ -406,36 +417,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 <div className="font-bold text-sm text-[#0F2A4A]">
                                   {req.categoria.replace(/_/g, " ")}
                                 </div>
-                                <div className="text-[11px] text-slate-400">
-                                  {req.endereco || "Sem endereço"}
-                                </div>
+                                <div className="text-[11px] text-slate-400">{displayAddress}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 align-top text-sm text-slate-600">
-                            {req.endereco || "N/A"}
+                            {displayAddress}
                           </td>
                           <td className="px-6 py-4 align-top text-sm text-slate-600">
-                            {new Date(req.dataAbertura).toLocaleDateString(
-                              "pt-BR",
-                            )}
+                            {displayDate}
                           </td>
                           <td className="px-6 py-4 align-top">
                             <Badge
-                              status={statusMap[req.status] || req.status}
+                              status={statusMap[req.status] ?? req.status}
                               variant={
                                 req.status === "ABERTO"
                                   ? "orange"
-                                  : req.status === "EM_EXECUCAO"
-                                    ? "blue"
-                                    : req.status === "CONCLUIDO"
-                                      ? "green"
-                                      : "blue"
+                                  : req.status === "CONCLUIDO"
+                                  ? "green"
+                                  : "blue"
                               }
                             />
                           </td>
                           <td className="px-6 py-4 align-top text-xs text-slate-400 font-mono">
-                            {req.protocoloNumero || `PRF-${req.id}`}
+                            {req.protocoloNumero ?? `PRF-${req.id}`}
                           </td>
                         </tr>
                       );
@@ -476,9 +481,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
             {/* Notifications */}
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <h3 className="text-sm font-bold mb-4 text-[#0F2A4A]">
-                Notificações
-              </h3>
+              <h3 className="text-sm font-bold mb-4 text-[#0F2A4A]">Notificações</h3>
               <div className="space-y-3">
                 {ACTIVITY_EVENTS.map((ev, i) => (
                   <div
@@ -492,12 +495,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm text-slate-700 leading-snug">
-                        {ev.msg}
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        {ev.time}
-                      </span>
+                      <p className="text-sm text-slate-700 leading-snug">{ev.msg}</p>
+                      <span className="text-[11px] text-slate-400">{ev.time}</span>
                     </div>
                   </div>
                 ))}
@@ -507,37 +506,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         </div>
       </main>
 
+      {/* REQUEST MODAL */}
       {showRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
             <div className="bg-[#0F2A4A] px-8 py-6">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-bold text-white">
-                    Nova Solicitação
-                  </h2>
+                  <h2 className="text-xl font-bold text-white">Nova Solicitação</h2>
                   <p className="text-sm text-slate-200 mt-1">
                     Categoria selecionada:{" "}
-                    <span className="font-semibold">
-                      {selectedCategoryLabel}
-                    </span>
+                    <span className="font-semibold">{selectedCategoryLabel}</span>
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={handleRequestCancel}
+                  onClick={resetForm}
                   className="text-white/80 hover:text-white"
                 >
                   <i className="ti ti-x text-lg" aria-hidden="true" />
                 </button>
               </div>
             </div>
+
             <div className="p-8 space-y-5">
               {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
+
               {!selectedCategory ? (
                 <>
                   <div>
@@ -549,9 +547,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           key={cat.id}
                           type="button"
-                          onClick={() =>
-                            handleCategorySelect(cat.id.toString())
-                          }
+                          onClick={() => handleCategorySelect(cat.id.toString())}
                           className="rounded-2xl border border-slate-200 p-4 bg-slate-50 text-slate-700 hover:border-[#0F2A4A] hover:bg-slate-100 transition-colors"
                         >
                           <div
@@ -562,16 +558,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                               aria-hidden="true"
                             />
                           </div>
-                          <div className="text-xs font-semibold text-center">
-                            {cat.label}
-                          </div>
+                          <div className="text-xs font-semibold text-center">{cat.label}</div>
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="text-sm text-slate-500">
-                    Escolha a categoria para continuar com os detalhes da
-                    solicitação.
+                    Escolha a categoria para continuar com os detalhes da solicitação.
                   </div>
                 </>
               ) : (
@@ -597,6 +590,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       Endereço da ocorrência
@@ -609,6 +603,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
                     />
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -638,6 +633,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       </select>
                     </div>
                   </div>
+
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       Descrição do problema
@@ -650,10 +646,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors resize-none"
                     />
                   </div>
+
                   <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                     <button
                       type="button"
-                      onClick={handleRequestCancel}
+                      onClick={resetForm}
                       className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                     >
                       Cancelar
@@ -662,14 +659,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       type="button"
                       onClick={handleRequestSubmit}
                       disabled={
+                        loading ||
                         !selectedCategory ||
                         !requestTitle ||
                         !requestAddress ||
                         !requestDescription
                       }
-                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      Abrir solicitação
+                      {loading ? (
+                        <>
+                          <i className="ti ti-loader animate-spin" aria-hidden="true" />
+                          Enviando...
+                        </>
+                      ) : (
+                        "Abrir solicitação"
+                      )}
                     </button>
                   </div>
                 </>

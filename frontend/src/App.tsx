@@ -4,6 +4,7 @@ import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
 import Dashboard from "./pages/Dashboard";
 import type { Screen } from "./types";
+import GestorPage from "./pages/GestorPage";
 
 function App() {
   const [screen, setScreen] = useState<Screen>("landing");
@@ -11,7 +12,7 @@ function App() {
   if (screen === "login") {
     return (
       <LoginPage
-        onLoginSuccess={() => setScreen("dashboard")}
+        onLoginSuccess={(destino) => setScreen(destino)}
         onBack={() => setScreen("landing")}
         onSignup={() => setScreen("signup")}
       />
@@ -25,6 +26,10 @@ function App() {
         onBack={() => setScreen("landing")}
       />
     );
+  }
+
+  if (screen === "gestor") {
+    return <GestorPage onLogout={() => setScreen("landing")} />;
   }
 
   if (screen === "dashboard") {

@@ -1,6 +1,5 @@
 // API Base URL - pode ser configurado via variáveis de ambiente
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_BASE_URL = "http://localhost:8080/api";
 
 // Tipos genéricos para respostas
 interface ApiResponse<T> {
@@ -95,12 +94,18 @@ export const usuarioService = {
 // ============= SOLICITAÇÕES =============
 
 export type CategoriaSolicitacao =
-  | "ILUMINACAO_PUBLICA"
-  | "BURACO_VIA"
+  | "INFRAESTRUTURA_URBANA"
   | "LIMPEZA_URBANA"
+  | "MEIO_AMBIENTE"
+  | "ILUMINACAO_PUBLICA"
+  | "TRANSITO_MOBILIDADE"
   | "SAUDE_PUBLICA"
-  | "SEGURANCA_ESCOLAR"
-  | "PODA_ARVORES"
+  | "LIMPEZA_URBANA"
+  | "EDUCACAO"
+  | "SEGURANCA_PUBLICA"
+  | "OBRAS_PUBLICAS"
+  | "SANEAMENTO"
+  | "SERVICOS_PUBLICOS"
   | "OUTROS";
 
 export type PrioridadeSolicitacao = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
