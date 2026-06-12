@@ -31,7 +31,7 @@ interface SLAData {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const PRIORIDADE_OPTS = ["BAIXA", "MEDIA", "ALTA", "URGENTE"] as const;
-type Prioridade = (typeof PRIORIDADE_OPTS)[number];
+type Prioridade = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
 
 const PRIORIDADE_COLOR: Record<Prioridade, string> = {
   BAIXA: "bg-slate-100 text-slate-600",
@@ -116,6 +116,8 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
   // reatribuição form
   const [usuarioReatribuicao, setUsuarioReatribuicao] = useState<number | "">("");
 
+  const [selectedRequest, setSelectedRequest] = useState<SolicitacaoResponseDTO | null>(null);
+
   // ── carregamento de dados ──────────────────────────────────────────────────
 
   const carregar = async () => {
@@ -160,9 +162,20 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
 
   // ── solicitações filtradas ─────────────────────────────────────────────────
 
+  const CATEGORY_ID_TO_ENUM: Record<string, string> = {
+    ILUMINACAO:  "ILUMINACAO_PUBLICA",
+    BURACO:      "INFRAESTRUTURA_URBANA",
+    LIMPEZA:     "LIMPEZA_URBANA",
+    SAUDE:       "SAUDE_PUBLICA",
+    SEGURANCA:   "SEGURANCA_PUBLICA",
+    PODA:        "MEIO_AMBIENTE",
+    OUTROS:      "OUTROS",
+  };
+
   const solFiltradas = solicitacoes.filter((s) => {
     const statusOk = solFiltroStatus === "todos" || s.status === solFiltroStatus;
-    const catOk = solFiltroCategoria === "todas" || s.categoria === solFiltroCategoria;
+    const catEnum = CATEGORY_ID_TO_ENUM[solFiltroCategoria] ?? solFiltroCategoria;
+    const catOk = solFiltroCategoria === "todas" || s.categoria === catEnum;
     const buscaOk = !solBusca || s.descricao.toLowerCase().includes(solBusca.toLowerCase()) || String(s.id).includes(solBusca);
     return statusOk && catOk && buscaOk;
   });
@@ -178,15 +191,27 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
   // ── ações ──────────────────────────────────────────────────────────────────
 
   const handleAlterarPrioridade = async () => {
-    if (!prioridadeModal.id) return;
-    try {
-      await solicitacaoService.update(prioridadeModal.id, { prioridade: novaPrioridade } as any);
-      await carregar();
-      setPrioridadeModal({ open: false, id: null, atual: "" });
-    } catch {
-      alert("Erro ao alterar prioridade.");
-    }
-  };
+  if (!prioridadeModal.id) return;
+  try {
+    const solicitacaoAtual = solicitacoes.find((s) => s.id === prioridadeModal.id);
+    if (!solicitacaoAtual) throw new Error("Solicitação não encontrada");
+
+    await solicitacaoService.update(prioridadeModal.id, {
+      categoria: solicitacaoAtual.categoria,
+      descricao: solicitacaoAtual.descricao,
+      prioridade: novaPrioridade,
+      anonima: solicitacaoAtual.anonima,
+      usuarioId: solicitacaoAtual.usuarioId ?? undefined,
+      endereco: (solicitacaoAtual as any).endereco ?? "",
+    } as any);
+
+    await carregar();
+    setPrioridadeModal({ open: false, id: null, atual: "" });
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao alterar prioridade. Verifique se o backend está rodando.");
+  }
+};
 
   const handleReatribuir = async () => {
     if (!reatribuirModal.id || !usuarioReatribuicao) return;
@@ -523,7 +548,11 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
                           </tr>
                         ) : (
                           solFiltradas.map((s) => (
-                            <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                            <tr
+                              key={s.id}
+                              className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                              onClick={() => setSelectedRequest(s)}
+                            >
                               <td className="px-6 py-4 text-xs font-mono text-slate-400">#{s.id}</td>
                               <td className="px-6 py-4">
                                 <div className="font-semibold text-sm text-[#0F2A4A]">
@@ -917,9 +946,148 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
                 </button>
               </div>
             </form>
+            
           </div>
         </div>
       )}
+      {/*MODAL DETALHES DA SOLICITAÇÃO*/}
+      {selectedRequest && (() => {
+            const rawDate = (selectedRequest as any).createdAt ?? selectedRequest.dataAbertura;
+            const displayDate = rawDate ? new Date(rawDate).toLocaleDateString("pt-BR") : "—";
+            const displayAddress = (selectedRequest as any).endereco ?? "—";
+            const statusLabel = STATUS_LABEL[selectedRequest.status] ?? selectedRequest.status;
+            const statusColor =
+              selectedRequest.status === "CONCLUIDO" ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
+              selectedRequest.status === "ABERTO"    ? "text-orange-600 bg-orange-50 border-orange-200" :
+                                                      "text-sky-600 bg-sky-50 border-sky-200";
+
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setSelectedRequest(null)}
+              >
+                <div
+                  className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-[#0F2A4A] px-7 py-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                          <i className="ti ti-file-text text-xl text-white" aria-hidden="true" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-bold text-white">
+                            {selectedRequest.categoria.replace(/_/g, " ")}
+                          </h2>
+                          <p className="text-xs text-white/60 mt-0.5">
+                            #{selectedRequest.id}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRequest(null)}
+                        className="text-white/70 hover:text-white transition-colors"
+                      >
+                        <i className="ti ti-x text-lg" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-7 space-y-5">
+                    {/* Status + Prioridade + Data */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                        selectedRequest.prioridade === "URGENTE" ? "bg-red-100 text-red-700" :
+                        selectedRequest.prioridade === "ALTA"    ? "bg-orange-100 text-orange-700" :
+                        selectedRequest.prioridade === "MEDIA"   ? "bg-blue-100 text-blue-700" :
+                                                                  "bg-slate-100 text-slate-600"
+                      }`}>
+                        {selectedRequest.prioridade}
+                      </span>
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <i className="ti ti-calendar text-sm" aria-hidden="true" />
+                        {displayDate}
+                      </span>
+                    </div>
+
+                    {/* Responsável */}
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Responsável</p>
+                      <p className="text-sm text-slate-700 flex items-center gap-2">
+                        <i className="ti ti-user text-base text-slate-400 shrink-0" aria-hidden="true" />
+                        {selectedRequest.usuarioId
+                          ? usuarios.find((u) => u.id === selectedRequest.usuarioId)?.nome || `ID ${selectedRequest.usuarioId}`
+                          : <span className="text-slate-400 italic">Não atribuído</span>
+                        }
+                      </p>
+                    </div>
+
+                    {/* Local */}
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Local</p>
+                      <p className="text-sm text-slate-700 flex items-start gap-2">
+                        <i className="ti ti-map-pin text-base text-slate-400 mt-0.5 shrink-0" aria-hidden="true" />
+                        {displayAddress}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-slate-100" />
+
+                    {/* Descrição */}
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Descrição da solicitação</p>
+                      {selectedRequest.descricao ? (
+                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100">
+                          {selectedRequest.descricao}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-slate-400 italic">Nenhuma descrição fornecida.</p>
+                      )}
+                    </div>
+
+                    {/* Ações rápidas */}
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRequest(null);
+                          setPrioridadeModal({ open: true, id: selectedRequest.id, atual: selectedRequest.prioridade });
+                          setNovaPrioridade(selectedRequest.prioridade as unknown as Prioridade);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <i className="ti ti-flag text-base" aria-hidden="true" />
+                        Alterar Prioridade
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPrioridadeModal({ open: true, id: selectedRequest.id, atual: selectedRequest.prioridade }); setNovaPrioridade((selectedRequest.prioridade as string) as Prioridade); }}
+                        className="flex items-center gap-1 text-xs font-semibold text-[#2E7BD4] hover:underline"
+                      >
+                        <i className="ti ti-flag text-sm" aria-hidden="true" />
+                        Prioridade
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setReatribuirModal({ open: true, id: selectedRequest.id }); setUsuarioReatribuicao(""); }}
+                        className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:underline"
+                      >
+                        <i className="ti ti-arrows-exchange text-sm" aria-hidden="true" />
+                        Reatribuir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
     </div>
   );
 };
