@@ -22,6 +22,8 @@ public class SolicitacaoCreateDTO {
 
     private PrioridadeSolicitacao prioridade = PrioridadeSolicitacao.MEDIA;
 
+    private StatusSolicitacao status = StatusSolicitacao.ABERTO;
+
     private Boolean anonima = false;
 
     private Long usuarioId;

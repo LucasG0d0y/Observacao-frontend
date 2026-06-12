@@ -62,6 +62,9 @@ public class SolicitacaoMapper {
             entity.setPrioridade(dto.getPrioridade());
         }
 
+        if (dto.getStatus() != null){
+            entity.setStatus(dto.getStatus());
+        }
 
         entity.setAnonima(
                 dto.getAnonima() != null

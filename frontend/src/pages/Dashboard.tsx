@@ -105,9 +105,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }, [carregarSolicitacoes]);
 
   const filtered = solicitacoes.filter((r) => {
-    if (filter === "abertas")
-      return r.status === "ABERTO" || r.status === "EM_EXECUCAO";
-    if (filter === "concluidas") return r.status === "CONCLUIDO";
+  if (filter === "abertas")
+    return r.status === "ABERTO" || r.status === "EM_EXECUCAO" || r.status === "EM_TRIAGEM";
+  if (filter === "concluidas")
+    return r.status === "CONCLUIDO";
     return true;
   });
 
@@ -206,15 +207,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     ["ti-shield", "Privacidade"],
   ];
 
-  const statusMap: Record<string, string> = {
-    ABERTO: "ABERTO",
-    EM_EXECUCAO: "EM EXECUÇÃO",
-    CONCLUIDO: "CONCLUÍDO",
-    EM_TRIAGEM: "EM TRIAGEM",
-    AGUARDANDO_COMPLEMENTACAO: "AGUARDANDO",
-    CANCELADO: "CANCELADO",
-    REJEITADO: "REJEITADO",
-  };
+const statusMap: Record<string, string> = {
+  ABERTO: "ABERTO",
+  TRIAGEM: "EM TRIAGEM",
+  EM_EXECUCAO: "EM EXECUÇÃO",
+  RESOLVIDO: "RESOLVIDO",
+  ENCERRADO: "ENCERRADO",
+};
 
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
@@ -444,11 +443,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             <Badge
                               status={statusMap[req.status] ?? req.status}
                               variant={
-                                req.status === "ABERTO"
+                                req.status === "ABERTO" || req.status === "EM_TRIAGEM"
                                   ? "orange"
                                   : req.status === "CONCLUIDO"
-                                    ? "green"
-                                    : "blue"
+                                  ? "green"
+                                  : "blue"
                               }
                             />
                           </td>

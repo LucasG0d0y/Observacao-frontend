@@ -12,13 +12,6 @@ interface FuncionarioPageProps {
 
 type FuncionarioTab = "dashboard" | "solicitacoes";
 
-interface SLAData {
-  label: string;
-  dentro: number;
-  fora: number;
-  total: number;
-}
-
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 type Prioridade = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
@@ -30,19 +23,20 @@ const PRIORIDADE_COLOR: Record<Prioridade, string> = {
   URGENTE: "bg-red-100 text-red-700",
 };
 
-const STATUS_VARIANT: Record<string, "blue" | "orange" | "green"> = {
-  ABERTO: "orange",
-  EM_EXECUCAO: "blue",
-  CONCLUIDO: "green",
-  EM_TRIAGEM: "blue",
-};
-
 const STATUS_LABEL: Record<string, string> = {
   ABERTO: "ABERTO",
   EM_EXECUCAO: "EM EXECUÇÃO",
-  EM_TRIAGEM: "EM TRIAGEM",
-  CONCLUIDO: "CONCLUÍDO",
-  CANCELADO: "CANCELADO",
+  TRIAGEM: "EM TRIAGEM",
+  RESOLVIDO: "RESOLVIDO",
+  ENCERRADO: "ENCERRADO",
+};
+
+const STATUS_VARIANT: Record<string, "blue" | "orange" | "green"> = {
+  ABERTO: "orange",
+  EM_EXECUCAO: "blue",
+  TRIAGEM: "blue",
+  RESOLVIDO: "green",
+  ENCERRADO: "green",
 };
 
 // ─── componente principal ─────────────────────────────────────────────────────
@@ -56,9 +50,8 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // modal reatribuir
-  const [reatribuirModal, setReatribuirModal] = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
-  const [usuarioReatribuicao, setUsuarioReatribuicao] = useState<number | "">("");
+  const [statusModal, setStatusModal] = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
+  const [novoStatus, setNovoStatus] = useState<string>("ABERTO");
 
   // modal detalhes da solicitação
   const [detalheModal, setDetalheModal] = useState<SolicitacaoResponseDTO | null>(null);
@@ -109,12 +102,6 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
     return { label: cat.label, count, icon: cat.icon, iconColor: cat.iconColor, bgColor: cat.bgColor };
   }).filter((c) => c.count > 0).sort((a, b) => b.count - a.count);
 
-  const slaData: SLAData[] = [
-    { label: "BAIXA", dentro: Math.max(0, solicitacoes.filter((s) => s.prioridade === "BAIXA").length - 1), fora: 1, total: solicitacoes.filter((s) => s.prioridade === "BAIXA").length },
-    { label: "MÉDIA", dentro: solicitacoes.filter((s) => s.prioridade === "MEDIA" && s.status === "CONCLUIDO").length, fora: solicitacoes.filter((s) => s.prioridade === "MEDIA" && s.status !== "CONCLUIDO").length, total: solicitacoes.filter((s) => s.prioridade === "MEDIA").length },
-    { label: "ALTA", dentro: solicitacoes.filter((s) => s.prioridade === "ALTA" && s.status === "CONCLUIDO").length, fora: solicitacoes.filter((s) => s.prioridade === "ALTA" && s.status !== "CONCLUIDO").length, total: solicitacoes.filter((s) => s.prioridade === "ALTA").length },
-    { label: "URGENTE", dentro: solicitacoes.filter((s) => s.prioridade === "URGENTE" && s.status === "CONCLUIDO").length, fora: solicitacoes.filter((s) => s.prioridade === "URGENTE" && s.status !== "CONCLUIDO").length, total: solicitacoes.filter((s) => s.prioridade === "URGENTE").length },
-  ];
 
   // ── solicitações filtradas ─────────────────────────────────────────────────
 
@@ -125,19 +112,30 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
     return statusOk && catOk && buscaOk;
   });
 
-  // ── ações ──────────────────────────────────────────────────────────────────
 
-  const handleReatribuir = async () => {
-    if (!reatribuirModal.id || !usuarioReatribuicao) return;
-    try {
-      await solicitacaoService.update(reatribuirModal.id, { usuarioId: Number(usuarioReatribuicao) } as any);
-      await carregar();
-      setReatribuirModal({ open: false, id: null });
-      setUsuarioReatribuicao("");
-    } catch {
-      alert("Erro ao reatribuir.");
-    }
-  };
+  const handleAlterarStatus = async () => {
+  if (!statusModal.id) return;
+  try {
+    const solicitacaoAtual = solicitacoes.find((s) => s.id === statusModal.id);
+    if (!solicitacaoAtual) throw new Error("Solicitação não encontrada");
+
+    await solicitacaoService.update(statusModal.id, {
+      categoria: solicitacaoAtual.categoria,
+      descricao: solicitacaoAtual.descricao,
+      prioridade: solicitacaoAtual.prioridade,
+      status: novoStatus as any,
+      anonima: solicitacaoAtual.anonima,
+      usuarioId: solicitacaoAtual.usuarioId ?? undefined,
+      endereco: (solicitacaoAtual as any).endereco ?? "",
+    } as any);
+
+    await carregar();
+    setStatusModal({ open: false, id: null });
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao alterar status: " + (err instanceof Error ? err.message : "Erro desconhecido"));
+      }
+    };
 
   // ── navegação ──────────────────────────────────────────────────────────────
 
@@ -281,33 +279,54 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                 </div>
 
                 <div className="grid grid-cols-[1fr_340px] gap-6">
-                  {/* SLA por prioridade */}
-                  <div className="bg-white border border-slate-100 rounded-2xl p-6">
-                    <h2 className="text-base font-bold text-[#0F2A4A] mb-1">SLA por Prioridade</h2>
-                    <p className="text-xs text-slate-400 mb-6">Proporção de solicitações dentro e fora do prazo por nível de prioridade.</p>
-                    <div className="space-y-5">
-                      {slaData.map((row) => {
-                        const pct = row.total > 0 ? Math.round((row.dentro / row.total) * 100) : 0;
-                        const barColor = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-red-500";
-                        return (
-                          <div key={row.label}>
-                            <div className="flex justify-between items-center mb-1.5">
-                              <span className="text-sm font-semibold text-slate-700">{row.label}</span>
-                              <div className="flex items-center gap-3 text-xs text-slate-500">
-                                <span className="text-emerald-600 font-semibold">{row.dentro} dentro</span>
-                                <span className="text-red-500 font-semibold">{row.fora} fora</span>
-                                <span className="font-bold text-slate-700">{pct}%</span>
-                              </div>
-                            </div>
-                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${barColor} rounded-full transition-all`}
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* tabela de solicitações recentes */}
+                  <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-100">
+                      <h2 className="text-base font-bold text-[#0F2A4A]">Solicitações Recentes</h2>
+                      <p className="text-xs text-slate-400 mt-1">Clique em uma linha para ver detalhes ou alterar o status.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left">
+                        <thead className="bg-slate-50">
+                          <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                            <th className="px-6 py-4">Categoria</th>
+                            <th className="px-6 py-4">Prioridade</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {solicitacoes.slice(0, 5).map((s) => (
+                            <tr
+                              key={s.id}
+                              className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                              onClick={() => setDetalheModal(s)}
+                            >
+                              <td className="px-6 py-4">
+                                <div className="font-semibold text-sm text-[#0F2A4A]">{s.categoria.replace(/_/g, " ")}</div>
+                                <div className="text-xs text-slate-400 truncate max-w-[200px]">{s.descricao}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${PRIORIDADE_COLOR[s.prioridade as Prioridade] || "bg-slate-100 text-slate-600"}`}>
+                                  {s.prioridade}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge status={STATUS_LABEL[s.status] || s.status} variant={STATUS_VARIANT[s.status] || "blue"} />
+                              </td>
+                              <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => { setStatusModal({ open: true, id: s.id }); setNovoStatus(s.status); }}
+                                  className="flex items-center gap-1 text-xs font-semibold text-[#2E7BD4] hover:underline"
+                                >
+                                  <i className="ti ti-refresh text-sm" aria-hidden="true" />
+                                  Status
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -327,10 +346,7 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-semibold text-slate-700 truncate">{c.label}</div>
                               <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                                <div
-                                  className="h-full bg-[#2E7BD4] rounded-full"
-                                  style={{ width: `${total > 0 ? (c.count / total) * 100 : 0}%` }}
-                                />
+                                <div className="h-full bg-[#2E7BD4] rounded-full" style={{ width: `${total > 0 ? (c.count / total) * 100 : 0}%` }} />
                               </div>
                             </div>
                             <span className="text-sm font-bold text-[#0F2A4A] shrink-0">{c.count}</span>
@@ -398,11 +414,11 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                     onChange={(e) => setSolFiltroStatus(e.target.value)}
                     className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-blue-400 transition-colors"
                   >
-                    <option value="todos">Todos os status</option>
                     <option value="ABERTO">Aberto</option>
-                    <option value="EM_TRIAGEM">Em triagem</option>
+                    <option value="TRIAGEM">Em triagem</option>
                     <option value="EM_EXECUCAO">Em execução</option>
-                    <option value="CONCLUIDO">Concluído</option>
+                    <option value="RESOLVIDO">Resolvido</option>
+                    <option value="ENCERRADO">Encerrado</option>
                   </select>
 
                   <select
@@ -467,11 +483,11 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                               </td>
                               <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                 <button
-                                  onClick={() => { setReatribuirModal({ open: true, id: s.id }); setUsuarioReatribuicao(""); }}
-                                  className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-[#0F2A4A] hover:underline transition-colors"
+                                  onClick={() => { setStatusModal({ open: true, id: s.id }); setNovoStatus(s.status); }}
+                                  className="flex items-center gap-1 text-xs font-semibold text-[#2E7BD4] hover:underline"
                                 >
-                                  <i className="ti ti-arrows-exchange text-sm" aria-hidden="true" />
-                                  Reatribuir
+                                  <i className="ti ti-refresh text-sm" aria-hidden="true" />
+                                  Alterar Status
                                 </button>
                               </td>
                             </tr>
@@ -480,12 +496,6 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                       </tbody>
                     </table>
                   </div>
-                </div>
-
-                {/* aviso de restrição */}
-                <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-100 rounded-xl px-4 py-3">
-                  <i className="ti ti-lock text-sm" aria-hidden="true" />
-                  A alteração de prioridade é uma ação exclusiva do Gestor. Caso necessário, solicite a revisão ao seu gestor responsável.
                 </div>
               </div>
             )}
@@ -579,13 +589,13 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
                   <button
                     onClick={() => {
                       setDetalheModal(null);
-                      setReatribuirModal({ open: true, id: s.id });
-                      setUsuarioReatribuicao("");
+                      setStatusModal({ open: true, id: s.id });
+                      setNovoStatus(s.status);
                     }}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-[#2E7BD4] hover:bg-slate-50 transition-colors"
                   >
-                    <i className="ti ti-arrows-exchange text-sm" aria-hidden="true" />
-                    Reatribuir
+                    <i className="ti ti-refresh text-sm" aria-hidden="true" />
+                    Alterar Status
                   </button>
                   <button
                     onClick={() => setDetalheModal(null)}
@@ -600,47 +610,53 @@ const FuncionarioPage: React.FC<FuncionarioPageProps> = ({ onLogout }) => {
         );
       })()}
 
-      {/* ── MODAL: REATRIBUIR ─────────────────────────────────────────────── */}
-      {reatribuirModal.open && (
+      {statusModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-[#0F2A4A] px-6 py-5 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-white">Reatribuir Solicitação</h2>
-                <p className="text-sm text-white/60 mt-0.5">Solicitação #{reatribuirModal.id}</p>
+                <h2 className="text-lg font-bold text-white">Alterar Status</h2>
+                <p className="text-sm text-white/60 mt-0.5">Solicitação #{statusModal.id}</p>
               </div>
-              <button onClick={() => setReatribuirModal({ open: false, id: null })} className="text-white/70 hover:text-white">
+              <button onClick={() => setStatusModal({ open: false, id: null })} className="text-white/70 hover:text-white">
                 <i className="ti ti-x text-lg" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Matrícula / ID do responsável
-                </label>
-                <p className="text-xs text-slate-400 mb-3">
-                  Informe o ID do funcionário ou gestor para quem deseja transferir esta solicitação.
-                </p>
-                <input
-                  type="number"
-                  value={usuarioReatribuicao === "" ? "" : usuarioReatribuicao}
-                  onChange={(e) => setUsuarioReatribuicao(e.target.value ? Number(e.target.value) : "")}
-                  placeholder="Ex: 42"
-                  min={1}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
-                />
+                <label className="block text-sm font-semibold text-slate-700 mb-3">Selecione o novo status</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: "ABERTO",      label: "Aberto" },
+                    { value: "TRIAGEM",     label: "Em Triagem" },
+                    { value: "EM_EXECUCAO", label: "Em Execução" },
+                    { value: "RESOLVIDO",   label: "Resolvido" },
+                    { value: "ENCERRADO",   label: "Encerrado" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setNovoStatus(opt.value)}
+                      className={`px-4 py-3 rounded-xl border-2 text-sm font-bold transition-all ${
+                        novoStatus === opt.value
+                          ? "border-[#0F2A4A] bg-[#0F2A4A] text-white"
+                          : "border-slate-200 text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setReatribuirModal({ open: false, id: null })}
+                  onClick={() => setStatusModal({ open: false, id: null })}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleReatribuir}
-                  disabled={!usuarioReatribuicao}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleAlterarStatus}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#0F2A4A] text-white text-sm font-bold hover:bg-[#1A3D6B] transition-colors"
                 >
                   Confirmar
                 </button>

@@ -40,19 +40,20 @@ const PRIORIDADE_COLOR: Record<Prioridade, string> = {
   URGENTE: "bg-red-100 text-red-700",
 };
 
-const STATUS_VARIANT: Record<string, "blue" | "orange" | "green"> = {
-  ABERTO: "orange",
-  EM_EXECUCAO: "blue",
-  CONCLUIDO: "green",
-  EM_TRIAGEM: "blue",
-};
-
 const STATUS_LABEL: Record<string, string> = {
   ABERTO: "ABERTO",
   EM_EXECUCAO: "EM EXECUÇÃO",
-  EM_TRIAGEM: "EM TRIAGEM",
-  CONCLUIDO: "CONCLUÍDO",
-  CANCELADO: "CANCELADO",
+  TRIAGEM: "EM TRIAGEM",
+  RESOLVIDO: "RESOLVIDO",
+  ENCERRADO: "ENCERRADO",
+};
+
+const STATUS_VARIANT: Record<string, "blue" | "orange" | "green"> = {
+  ABERTO: "orange",
+  EM_EXECUCAO: "blue",
+  TRIAGEM: "blue",
+  RESOLVIDO: "green",
+  ENCERRADO: "green",
 };
 
 // mock de logs já que o backend ainda não expõe essa rota como REST padrão
@@ -504,11 +505,11 @@ const GestorPage: React.FC<GestorPageProps> = ({ onLogout }) => {
                     onChange={(e) => setSolFiltroStatus(e.target.value)}
                     className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-blue-400 transition-colors"
                   >
-                    <option value="todos">Todos os status</option>
                     <option value="ABERTO">Aberto</option>
-                    <option value="EM_TRIAGEM">Em triagem</option>
+                    <option value="TRIAGEM">Em triagem</option>
                     <option value="EM_EXECUCAO">Em execução</option>
-                    <option value="CONCLUIDO">Concluído</option>
+                    <option value="RESOLVIDO">Resolvido</option>
+                    <option value="ENCERRADO">Encerrado</option>
                   </select>
 
                   <select
