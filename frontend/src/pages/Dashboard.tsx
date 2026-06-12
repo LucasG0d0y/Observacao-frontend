@@ -61,7 +61,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   // Ref para fechar o dropdown ao clicar fora
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const usuario = authService.getCurrentUser();
+  // Lê o usuário UMA vez no mount — evita loop de re-render
+  const usuario = React.useMemo(() => authService.getCurrentUser(), []);
   const userName = usuario?.nome || "Usuário";
 
   // Iniciais do nome para o avatar
@@ -91,13 +92,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       setLoading(true);
       setError("");
       const dados = await solicitacaoService.getAll();
-      setSolicitacoes(dados || []);
+      const lista = dados || [];
+
+      // Cidadão só enxerga as próprias solicitações
+      if (usuario?.tipo === "CIDADAO") {
+        setSolicitacoes(lista.filter((s) => s.usuarioId === usuario.id));
+      } else {
+        setSolicitacoes(lista);
+      }
     } catch (err: unknown) {
       setError("Erro ao carregar solicitações");
       console.error(err);
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
