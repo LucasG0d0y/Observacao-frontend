@@ -52,6 +52,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoResponseDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedRequest, setSelectedRequest] = useState<SolicitacaoResponseDTO | null>(null);
 
   // Ref para fechar o dropdown ao clicar fora
   const profileRef = useRef<HTMLDivElement>(null);
@@ -370,7 +371,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       return (
                         <tr
                           key={req.id}
-                          className="border-b border-slate-100"
+                          className="border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                          onClick={() => setSelectedRequest(req)}
+                          title="Clique para ver a descrição"
                         >
                           <td className="px-6 py-4 align-top">
                             <div className="flex items-center gap-3">
@@ -595,6 +598,121 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </div>
         </div>
       )}
+      {/* DESCRIPTION POPUP MODAL */}
+      {selectedRequest && (() => {
+        const categoryIcon = CATEGORY_ICON_MAP[selectedRequest.categoria] ?? "ti-file-text";
+        const rawDate =
+          (selectedRequest as unknown as Record<string, string>).createdAt ??
+          selectedRequest.dataAbertura;
+        const displayDate = rawDate
+          ? new Date(rawDate).toLocaleDateString("pt-BR")
+          : "—";
+        const displayAddress =
+          (selectedRequest as unknown as Record<string, string>).endereco ?? "—";
+        const statusLabel = {
+          ABERTO: "ABERTO",
+          EM_EXECUCAO: "EM EXECUÇÃO",
+          CONCLUIDO: "CONCLUÍDO",
+          EM_TRIAGEM: "EM TRIAGEM",
+          AGUARDANDO_COMPLEMENTACAO: "AGUARDANDO",
+          CANCELADO: "CANCELADO",
+          REJEITADO: "REJEITADO",
+        }[selectedRequest.status] ?? selectedRequest.status;
+
+        const statusColor =
+          selectedRequest.status === "CONCLUIDO"
+            ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+            : selectedRequest.status === "ABERTO"
+            ? "text-orange-600 bg-orange-50 border-orange-200"
+            : "text-sky-600 bg-sky-50 border-sky-200";
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setSelectedRequest(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-[#0F2A4A] px-7 py-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                      <i className={`ti ${categoryIcon} text-xl text-white`} aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">
+                        {selectedRequest.categoria.replace(/_/g, " ")}
+                      </h2>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {selectedRequest.protocoloNumero ?? `PRF-${selectedRequest.id}`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRequest(null)}
+                    className="text-white/70 hover:text-white transition-colors"
+                  >
+                    <i className="ti ti-x text-lg" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-7 space-y-5">
+                {/* Status + Data */}
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${statusColor}`}>
+                    {statusLabel}
+                  </span>
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <i className="ti ti-calendar text-sm" aria-hidden="true" />
+                    {displayDate}
+                  </span>
+                </div>
+
+                {/* Local */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Local</p>
+                  <p className="text-sm text-slate-700 flex items-start gap-2">
+                    <i className="ti ti-map-pin text-base text-slate-400 mt-0.5 shrink-0" aria-hidden="true" />
+                    {displayAddress}
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-100" />
+
+                {/* Descrição */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Descrição da solicitação</p>
+                  {selectedRequest.descricao ? (
+                    <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100">
+                      {selectedRequest.descricao}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">Nenhuma descrição fornecida.</p>
+                  )}
+                </div>
+
+                {/* Footer button */}
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRequest(null)}
+                    className="px-5 py-2.5 rounded-2xl bg-[#0F2A4A] text-white text-sm font-semibold hover:bg-[#1A3D6B] transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
